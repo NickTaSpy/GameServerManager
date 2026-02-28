@@ -1,0 +1,125 @@
+﻿@page "/servers/{ServerId}/console"
+@page "/servers/{ServerId}"
+@implements IAsyncDisposable
+@inject ApiService Api
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@inject HubConnectorService HubConnector
+
+<PageTitle>@serverDetails.Name Console</PageTitle>
+
+<MudPaper Class="pa-5">
+    <div class="d-flex align-center justify-space-between">
+        <MudText Typo="Typo.h5">@serverDetails.Name</MudText>
+        <div class="d-flex">
+            <MudTooltip RootClass="d-flex align-center" Text="@(serverDetails.ProcessFound ? "Process Detected" : "Process Not Detected")">
+                <MudIcon Icon="@Icons.Material.Filled.Computer" Color="@(serverDetails.ProcessFound ? Color.Success : Color.Error)"></MudIcon>
+            </MudTooltip>
+            <MudTooltip RootClass="d-flex align-center" Text="@(serverDetails.Responding ? "Responding" : "Not responding")">
+                <MudIcon Icon="@Icons.Material.Filled.SignalCellularAlt" Color="@(serverDetails.Responding ? Color.Success : Color.Error)"></MudIcon>
+            </MudTooltip>     
+        </div>
+        <div>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" @onclick="UpdateServerDetails"></MudIconButton>
+            <MudButton Disabled="serverDetails.ProcessFound" Variant="Variant.Filled" Color="Color.Success" @onclick="StartServer">Start</MudButton>
+            <MudButton Disabled="!serverDetails.ProcessFound" Variant="Variant.Filled" Color="Color.Warning" @onclick="RestartServer">Restart</MudButton>
+            <MudButton Disabled="!serverDetails.ProcessFound" Variant="Variant.Filled" Color="Color.Error" @onclick="StopServer">Stop</MudButton>
+        </div>
+    </div>
+    <MudTextField @ref="consoleRef" Lines="20" @bind-Value="consoleText" ReadOnly="true" Label="Console" Variant="Variant.Outlined" />
+    <MudTextField Immediate="true" T="string" Placeholder="Enter command..." @bind-Value="@command" @onkeydown="EnterCommand_KeyDown"></MudTextField>
+    <MudButton Disabled="string.IsNullOrWhiteSpace(command)" Class="mt-1" Variant="Variant.Filled" Color="Color.Primary" @onclick="EnterCommand">Enter</MudButton>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public string? ServerId { get; set; }
+    private Guid serverIdGuid;
+
+    private MudTextField<string> consoleRef = null!;
+
+    private ServerDetails serverDetails = new ServerDetails();
+
+    private HubConnection? hubConnection;
+
+    private string consoleText = "";
+    private string command = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Guid.TryParse(ServerId, out serverIdGuid))
+        {
+            NavManager.NavigateTo("/servers");
+        }
+
+        await UpdateServerDetails();
+        await InitHub();
+        _ = JS.ScrollToEnd(consoleRef.InputReference.ElementReference);
+    }
+
+    private async Task UpdateServerDetails()
+    {
+        serverDetails = await Api.ServerDetails(serverIdGuid);
+    }
+
+    private async Task StartServer()
+    {
+        await Api.StartServer(serverIdGuid);
+        await UpdateServerDetails();
+    }
+
+    private async Task RestartServer()
+    {
+        await Api.RestartServer(serverIdGuid);
+        await UpdateServerDetails();
+    }
+
+    private async Task StopServer()
+    {
+        await Api.StopServer(serverIdGuid);
+        await UpdateServerDetails();
+    }
+
+    private async Task EnterCommand()
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await Api.ExecuteCommandServer(serverIdGuid, command);
+        command = "";
+        await UpdateServerDetails();
+    }
+
+    private async Task EnterCommand_KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await EnterCommand();
+        }
+    }
+
+    private async Task InitHub()
+    {
+        hubConnection = HubConnector.Create("/consolehub");
+
+        hubConnection.On<byte[]>("ReceiveLogs", logs =>
+        {
+            consoleText += Encoding.Default.GetString(logs);
+            InvokeAsync(StateHasChanged);
+            _ = JS.ScrollToEnd(consoleRef.InputReference.ElementReference);
+        });
+
+        await hubConnection.StartAsync();
+        await hubConnection.SendAsync("SubscribeServer", ServerId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

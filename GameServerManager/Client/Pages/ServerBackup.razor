@@ -1,0 +1,17 @@
+﻿@page "/servers/{ServerId}/backup"
+@inject ApiService Api
+@inject NavigationManager NavManager
+
+@code {
+    [Parameter]
+    public string? ServerId { get; set; }
+    private Guid serverIdGuid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Guid.TryParse(ServerId, out serverIdGuid))
+        {
+            NavManager.NavigateTo("/servers");
+        }
+    }
+}

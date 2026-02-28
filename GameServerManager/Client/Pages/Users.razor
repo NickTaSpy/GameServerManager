@@ -1,0 +1,22 @@
+﻿@page "/users"
+@inject ApiService Api
+
+<PageTitle>Users</PageTitle>
+
+<MudExpansionPanels>
+    @foreach (var user in users)
+    {
+        <MudExpansionPanel Text="@user.Username">
+            <MudText>Last Accessed: @(user.LastAccessed is null ? "" : user.LastAccessed.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss zzz"))</MudText>
+        </MudExpansionPanel>
+    }
+</MudExpansionPanels>
+
+@code {
+    List<UserInfo> users = new List<UserInfo>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await Api.UserList();
+    }
+}

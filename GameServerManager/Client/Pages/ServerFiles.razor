@@ -1,0 +1,289 @@
+﻿@page "/servers/{ServerId}/files/{Path?}"
+@inject ApiService Api
+@inject NavigationManager NavManager
+@inject IDialogService Dialog
+
+<PageTitle>Files</PageTitle>
+
+<MudPaper Class="pa-5">
+    <MudFileUpload T="IReadOnlyList<IBrowserFile>" OnFilesChanged="OnInputFileChanged" Hidden="false" Class="flex-1"
+                   InputClass="absolute mud-width-full mud-height-full overflow-hidden z-20" InputStyle="opacity:0"
+                   @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass">
+        <ButtonTemplate>
+            <MudPaper Height="7rem" Outlined="true" Class="@dragClass">
+                @if (!filesToUpload.Any())
+                {
+                    <MudText Typo="Typo.h6">Drag files here or click to upload</MudText>
+                }
+                @foreach (var file in filesToUpload)
+                {
+                    <MudChip Color="Color.Dark" Text="@file.Name" />
+                }
+            </MudPaper>
+        </ButtonTemplate>
+    </MudFileUpload>
+    <MudToolBar DisableGutters="true" Class="gap-4">
+        <MudButton OnClick="Upload" Disabled="@(!filesToUpload.Any())" Color="Color.Success" Variant="Variant.Filled">Upload</MudButton>
+        <MudButton OnClick="Clear" Disabled="@(!filesToUpload.Any())" Color="Color.Error" Variant="Variant.Filled">Clear</MudButton>
+    </MudToolBar>
+    <MudTable T="FileDetails" SortLabel="Sort By" Items="@files" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading"
+              LoadingProgressColor="Color.Info" Filter="FilterFile" FixedHeader="true" FixedFooter="true" EditTrigger="TableEditTrigger.EditButton"
+              CanCancelEdit="true" CommitEditTooltip="Commit Edit" RowEditPreview="x => OnEditPreview((FileDetails)x)"
+              RowEditCommit="async x => await OnEdit((FileDetails)x)" IsEditRowSwitchingBlocked="true">
+        <ToolBarContent>
+            <MudIconButton Size="@Size.Medium" Icon="@Icons.Material.Filled.Refresh" OnClick="UpdateFiles" Disabled="loading" />
+            <MudIconButton Size="@Size.Medium" Icon="@Icons.Material.Filled.FileDownload" OnClick="OnDownloadEverything" Disabled="loading" />
+            <MudBreadcrumbs Items="pathBreadcrumbItems"></MudBreadcrumbs>
+            <MudSpacer />
+            <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <ColGroup>
+            <col />
+            <col style="width: 10%;" />
+            <col style="width: 15%;" />
+            <col style="width: 15%;" />
+            <col style="width: 10%;" />
+            <col style="width: 10%;" />
+        </ColGroup>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<FileDetails, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<FileDetails, object>(x => x.IsDirectory)">Type</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<FileDetails, object>(x => x.ModifiedAt)">Modified</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<FileDetails, object>(x => x.CreatedAt)">Created</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<FileDetails, object>(x => x.SizeBytes ?? 0)">Size</MudTableSortLabel></MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Type">@(context.IsDirectory ? "Directory" : "File")</MudTd>
+            <MudTd DataLabel="Modified">@(context.ModifiedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))</MudTd>
+            <MudTd DataLabel="Created">@(context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))</MudTd>
+            <MudTd DataLabel="Size">@(BytesToFriendlyText(context.SizeBytes ?? 0))</MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton OnClick="x => OnDelete(context)" Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" Class="pa-0" aria-label="Delete"></MudIconButton>
+                @if (context.IsDirectory)
+                {
+                    <MudIconButton OnClick="x => OnOpenDirectory(context)" Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small" Class="pa-0" aria-label="Open"></MudIconButton>
+                }
+                <MudIconButton OnClick="x => OnDownload(context)" Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small" Class="pa-0" aria-label="Download"></MudIconButton>
+            </MudTd>
+        </RowTemplate>
+        <RowEditingTemplate>
+            <MudTd DataLabel="Name">
+                <MudTextField @bind-Value="@context.Name" Required />
+            </MudTd>
+            <MudTd DataLabel="Type">@(context.IsDirectory ? "Directory" : "File")</MudTd>
+            <MudTd DataLabel="Modified">@(context.ModifiedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))</MudTd>
+            <MudTd DataLabel="Created">@(context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))</MudTd>
+            <MudTd DataLabel="Size">@(BytesToFriendlyText(context.SizeBytes ?? 0))</MudTd>
+            <MudTd DataLabel="Actions"></MudTd>
+        </RowEditingTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+        <EditButtonContent Context="button">
+            <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Outlined.Edit" Class="pa-0" OnClick="@button.ButtonAction" Disabled="@button.ButtonDisabled" />
+        </EditButtonContent>
+    </MudTable>
+</MudPaper>
+
+    @code {
+    [Parameter]
+    public string? Path { get; set; }
+
+    [Parameter]
+    public string? ServerId { get; set; }
+    private Guid serverIdGuid;
+
+    private List<BreadcrumbItem> pathBreadcrumbItems = new();
+
+    private List<FileDetails> files = new();
+
+    private bool loading;
+    private string searchString = "";
+
+    private string? nameBeforeEdit;
+
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string dragClass = DefaultDragClass;
+    private List<IBrowserFile> filesToUpload = new List<IBrowserFile>();
+
+    protected override void OnInitialized()
+    {
+        if (!Guid.TryParse(ServerId, out serverIdGuid))
+        {
+            NavManager.NavigateTo("/servers");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        UpdateBreadcrumb();
+        await UpdateFiles();
+    }
+
+    private void UpdateBreadcrumb()
+    {
+        pathBreadcrumbItems.Clear();
+
+        var pathDecoded = HttpUtility.UrlDecode(Path ?? "");
+
+        var pathParts = pathDecoded.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        pathBreadcrumbItems.Add(new BreadcrumbItem("(root)", GetRelativeUri(""), pathParts.Length == 0));
+
+        for (int i = 0; i < pathParts.Length; i++)
+        {
+            pathBreadcrumbItems.Add(new BreadcrumbItem(pathParts[i], GetRelativeUri(string.Join('/', pathParts, 0, i + 1)), i == pathParts.Length - 1));
+        }
+    }
+
+    private async Task UpdateFiles()
+    {
+        loading = true;
+        files = await Api.GetServerFiles(serverIdGuid, Path ?? "");
+        loading = false;
+    }
+
+    private bool FilterFile(FileDetails file)
+    {
+        return file.Name.Contains(searchString);
+    }
+
+    private void OnOpenDirectory(FileDetails args)
+    {
+        if (!args.IsDirectory || loading)
+        {
+            return;
+        }
+
+        loading = true;
+        searchString = "";
+        string newPath;
+
+        if (string.IsNullOrEmpty(Path))
+        {
+            newPath = args.Name;
+        }
+        else
+        {
+            newPath = Path + "/" + args.Name;
+        }
+
+        NavManager.NavigateTo(GetRelativeUri(newPath));
+    }
+
+    private async Task OnDownloadEverything()
+    {
+        var token = await Api.CreateShortTermToken();
+        await Api.DownloadFile(serverIdGuid, token, Path ?? "");
+    }
+
+    private async Task OnDownload(FileDetails fileDetails)
+    {
+        var token = await Api.CreateShortTermToken();
+        await Api.DownloadFile(serverIdGuid, token, System.IO.Path.Combine(Path ?? "", fileDetails.Name));
+    }
+
+    private async Task OnDelete(FileDetails fileDetails)
+    {
+        if (await Dialog.ShowMessageBox("Delete", $"Are you sure you want to permanently delete '{fileDetails.Name}'? You cannot undo this action.", "Yes", "No") != true)
+        {
+            return;
+        }
+
+        loading = true;
+        StateHasChanged();
+
+        await Api.DeleteFile(serverIdGuid, System.IO.Path.Combine(Path ?? "", fileDetails.Name));
+        await UpdateFiles();
+
+        loading = false;
+        StateHasChanged();
+    }
+
+    private async Task OnEdit(FileDetails fileDetails)
+    {
+        if (nameBeforeEdit is null)
+        {
+            return;
+        }
+
+        loading = true;
+        StateHasChanged();
+
+        try
+        {
+            await Api.RenameFile(new RenameFileRequest
+            {
+                ServerId = serverIdGuid,
+                Path = System.IO.Path.Combine(Path ?? "", nameBeforeEdit),
+                NewName = fileDetails.Name
+            });
+        }
+        catch
+        {
+            fileDetails.Name = nameBeforeEdit;
+        }
+
+        nameBeforeEdit = null;
+        loading = false;
+        StateHasChanged();
+    }
+
+    private void OnEditPreview(FileDetails fileDetails)
+    {
+        nameBeforeEdit = fileDetails.Name;
+    }
+
+
+    private void OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+        filesToUpload.AddRange(e.GetMultipleFiles().Where(x => MediaTypeHeaderValue.TryParse(x.ContentType, out _)));
+    }
+
+    private void OnRemoveFile(IBrowserFile file)
+    {
+        filesToUpload.Remove(file);
+    }
+
+    private void Clear()
+    {
+        filesToUpload = new List<IBrowserFile>();
+        ClearDragClass();
+    }
+
+    private async Task Upload()
+    {
+        loading = true;
+        StateHasChanged();
+
+        await Api.UploadFile(serverIdGuid, Path ?? "", filesToUpload);
+        await UpdateFiles();
+
+        loading = false;
+        StateHasChanged();
+    }
+
+    private string GetRelativeUri(string relativePath)
+    {
+        return $"/servers/{ServerId}/files/{HttpUtility.UrlEncode(relativePath)}";
+    }
+
+    private string BytesToFriendlyText(double bytes)
+    {
+        var byteSize = ByteSize.FromBytes(bytes);
+        return byteSize.LargestWholeNumberBinaryValue.ToString("0.##", CultureInfo.InvariantCulture) + " " + byteSize.LargestWholeNumberBinarySymbol;
+    }
+
+    private void SetDragClass()
+    {
+        dragClass = $"{DefaultDragClass} mud-border-primary";
+    }
+
+    private void ClearDragClass()
+    {
+        dragClass = DefaultDragClass;
+    }
+}

@@ -1,0 +1,60 @@
+﻿@implements IDisposable
+@inject NavigationManager NavManager
+
+<MudNavMenu Color="Color.Success" Bordered="true">
+    <MudNavLink Match="NavLinkMatch.All" Href="" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+    <MudNavLink Match="NavLinkMatch.All" Href="/servers" Icon="@Icons.Material.Filled.Computer">Servers</MudNavLink>
+    @if (selectedServerId is not null)
+    {
+        <MudNavGroup Expanded="true" IconColor="@Color.Warning" Icon="@Icons.Material.Filled.Computer" Title="Selected Server">
+            <MudNavLink Match="NavLinkMatch.All" Href="@($"/servers/{selectedServerId}/console")" IconColor="@Color.Warning" Icon="@Icons.Material.Filled.KeyboardArrowRight">Console</MudNavLink>
+            <MudNavLink Match="NavLinkMatch.Prefix" Href="@($"/servers/{selectedServerId}/files")" IconColor="@Color.Warning" Icon="@Icons.Material.Filled.Folder">Files</MudNavLink>
+            <MudNavLink Match="NavLinkMatch.All" Href="@($"/servers/{selectedServerId}/backups")" IconColor="@Color.Warning" Icon="@Icons.Material.Filled.Backup">Backups</MudNavLink>
+        </MudNavGroup>
+    }
+    <MudNavLink Match="NavLinkMatch.All" Href="/users" Icon="@Icons.Material.Filled.ManageAccounts">Users</MudNavLink>
+</MudNavMenu>
+
+@code {
+    private Guid? selectedServerId;
+
+    protected override Task OnInitializedAsync()
+    {
+        HandleLocation(NavManager.Uri);
+        NavManager.LocationChanged += OnLocationChanged;
+        return Task.CompletedTask;
+    }
+
+    private void OnServerSelected(Guid serverId)
+    {
+        selectedServerId = serverId;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        HandleLocation(args.Location);
+    }
+
+    private void HandleLocation(string location)
+    {
+        var parts = location.Split('/');
+
+        var serversPartIndex = Array.FindIndex(parts, x => x == "servers");
+
+        if (serversPartIndex != -1 && parts.Length > serversPartIndex + 1 && Guid.TryParse(parts[serversPartIndex + 1], out var serverId))
+        {
+            selectedServerId = serverId;
+        }
+        else
+        {
+            selectedServerId = null;
+        }
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavManager.LocationChanged -= OnLocationChanged;
+    }
+}

@@ -1,0 +1,70 @@
+﻿@page "/servers"
+@inject ApiService Api
+@inject NavigationManager NavManager
+@inject IDialogService Dialog
+
+<PageTitle>Server Status</PageTitle>
+
+<MudPaper Class="pa-5">
+    <MudTable T="ServerInfo" SortLabel="Sort By" Items="@servers" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@loading"
+              LoadingProgressColor="Color.Info" Filter="FilterServer" FixedHeader="true" FixedFooter="true" OnRowClick="OnServerClick">
+        <ToolBarContent>
+            <MudIconButton Size="@Size.Medium" Icon="@Icons.Material.Filled.Refresh" OnClick="UpdateServers" Disabled="loading" />
+            <MudSpacer />
+            <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<ServerInfo, object>(x => x.Name)">Name</MudTableSortLabel></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+    <MudButton OnClick="ShowCreateServerDialog" Class="mt-3" Variant="Variant.Filled">Create Server</MudButton>
+</MudPaper>
+
+@code {
+    private List<ServerInfo> servers = new();
+
+    private string searchString = "";
+
+    private bool loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UpdateServers();
+    }
+
+    private async Task UpdateServers()
+    {
+        loading = true;
+        StateHasChanged();
+        servers = await Api.ServerList();
+        loading = false;
+        StateHasChanged();
+    }
+
+    private void OnServerClick(TableRowClickEventArgs<ServerInfo> args)
+    {
+        NavManager.NavigateTo($"/servers/{args.Item.Id}/console");
+    }
+
+    private bool FilterServer(ServerInfo server)
+    {
+        return server.Name.Contains(searchString);
+    }
+
+    private async void ShowCreateServerDialog()
+    {
+        var dialog = await Dialog.ShowAsync<CreateServerDialog>();
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await UpdateServers();
+        }
+    }
+}

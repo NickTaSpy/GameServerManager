@@ -1,0 +1,11 @@
+global using Xunit;
+global using GameServerManager.Server.Controllers;
+global using GameServerManager.Server.Database;
+global using GameServerManager.Shared;
+global using Microsoft.EntityFrameworkCore;
+global using Moq;
+global using Moq.EntityFrameworkCore;
+global using FluentAssertions;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.AspNetCore.Mvc;
+global using System.Text;

@@ -1,0 +1,76 @@
+﻿@page "/"
+@implements IAsyncDisposable
+@inject NavigationManager NavManager
+@inject HubConnectorService HubConnector
+
+<div class="d-flex gap-2">
+    <MudPaper Class="pa-5">
+        <MudText Align="Align.Center" Typo="Typo.h6">Memory - Total @totalMemoryText GiB</MudText>
+        <MudChart ChartOptions="memoryStatsOptions" ChartType="ChartType.Line" ChartSeries="memoryStatsSeries" XAxisLabels="timestampLabels" Width="100%" Height="350px"></MudChart>
+    </MudPaper>
+    <MudPaper Class="pa-5">
+        <MudText Align="Align.Center" Typo="Typo.h6">CPU</MudText>
+        <MudChart ChartOptions="cpuStatsOptions" ChartType="ChartType.Line" ChartSeries="cpuStatsSeries" XAxisLabels="timestampLabels" Width="100%" Height="350px"></MudChart>
+    </MudPaper>
+</div>
+
+@code {
+    private const int MaxStats = 10;
+
+    private string totalMemoryText = "";
+
+    private List<ChartSeries> memoryStatsSeries = new List<ChartSeries>
+    {
+        new ChartSeries { Name = "Used GiB", Data = new double[0] },
+        new ChartSeries { Name = "Available GiB", Data = new double[0] }
+    };
+
+    private List<ChartSeries> cpuStatsSeries = new List<ChartSeries>
+    {
+        new ChartSeries { Name = "Usage %", Data = new double[0] }
+    };
+
+    private string[] timestampLabels = new string[0];
+
+    private ChartOptions memoryStatsOptions = new ChartOptions
+    {
+        YAxisTicks = 1
+    };
+
+    private ChartOptions cpuStatsOptions = new ChartOptions
+    {
+        YAxisTicks = 10
+    };
+
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await InitHub();
+    }
+
+    private async Task InitHub()
+    {
+        hubConnection = HubConnector.Create("/dashboardhub");
+
+        hubConnection.On<SystemStats>("ReceiveStats", sysStats =>
+        {
+            totalMemoryText = sysStats.TotalGiB.ToString("F2", CultureInfo.InvariantCulture);
+            memoryStatsSeries[0].Data = ChartHelper.AddSeriesData(memoryStatsSeries[0].Data, sysStats.UsedGiB, MaxStats);
+            memoryStatsSeries[1].Data = ChartHelper.AddSeriesData(memoryStatsSeries[1].Data, sysStats.AvailableGiB, MaxStats);
+            cpuStatsSeries[0].Data = ChartHelper.AddSeriesData(cpuStatsSeries[0].Data, sysStats.CpuUsage, MaxStats);
+            timestampLabels = ChartHelper.AddSeriesData(timestampLabels, sysStats.Timestamp.ToLocalTime().ToString("HH:mm:ss"), MaxStats);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

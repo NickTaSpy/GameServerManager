@@ -1,0 +1,79 @@
+﻿@inherits LayoutComponentBase
+@attribute [Authorize]
+
+<MudThemeProvider Theme="CustomTheme" IsDarkMode="true"/>
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Fixed="true">
+        <AuthorizeView>
+            <Authorized>
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+            </Authorized>
+        </AuthorizeView>
+        <MudText Typo="Typo.h6">Game Server Manager</MudText>
+        <MudSpacer />
+        <MudIconButton Color="Color.Inherit">
+            <LoginLogoutButton />
+        </MudIconButton>
+    </MudAppBar>
+
+    <AuthorizeView>
+
+        <Authorized>
+            <MudDrawer @bind-Open="@open" ClipMode="DrawerClipMode.Always" Elevation="1" Variant="DrawerVariant.Mini">
+                <NavMenu></NavMenu>
+            </MudDrawer>
+            <MudMainContent>
+                <div class="pa-3">
+                    @Body
+                </div>
+            </MudMainContent>
+        </Authorized>
+
+        <NotAuthorized>
+            <MudMainContent>
+                <div class="pa-3">
+                    <Login></Login>
+                </div>
+            </MudMainContent>
+        </NotAuthorized>
+
+    </AuthorizeView>
+</MudLayout>
+
+@code {
+    bool open = true;
+
+    void ToggleDrawer()
+    {
+        open = !open;
+    }
+
+    MudTheme CustomTheme = new MudTheme
+    {
+        Palette = new Palette()
+        {
+
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = Colors.Shades.White,
+            Secondary = Colors.Grey.Darken4,
+            AppbarBackground = Colors.Grey.Darken4,
+            AppbarText = Colors.Shades.White,
+            DrawerBackground = Colors.Grey.Darken4,
+            DrawerIcon = Colors.Shades.White,
+            DrawerText = Colors.Shades.White,
+            Background = Colors.Grey.Darken2,
+            TextPrimary = Colors.Shades.White,
+            Surface = new MudColor("#303030")
+        },
+        //LayoutProperties = new LayoutProperties()
+        //{
+        //    DrawerWidthLeft = "260px",
+        //    DrawerWidthRight = "300px"
+        //}
+    };
+}

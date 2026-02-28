@@ -1,0 +1,42 @@
+﻿@inject ApiService Api
+
+<MudDialog>
+    <TitleContent>Create Server</TitleContent>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField T="string" @bind-Value="request.Name" Label="Name" Required="true"/>
+            <MudTextField T="string" @bind-Value="request.Path" Label="Path" Required="true"/>
+            <MudTextField T="string" @bind-Value="request.Filename" Label="Executable File Name" Required="true"/>
+            <MudTextField T="string" @bind-Value="request.Arguments" Label="Execution Arguments"/>
+            <MudTextField T="int" @bind-Value="request.Port" Label="Port"/>
+        </MudForm>   
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="!success" Color="Color.Primary" OnClick="Submit">Create</MudButton>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = null!;
+
+    private MudForm? form;
+    private bool success;
+
+    private CreateServerRequest request = new();
+
+    protected override void OnInitialized()
+    {
+        MudDialog.Options.MaxWidth = MaxWidth.Small;
+        MudDialog.Options.FullWidth = true;
+        MudDialog.SetOptions(MudDialog.Options);
+    }
+
+    private async Task Submit()
+    {
+        await Api.CreateServer(request);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,35 @@
+﻿@inject ApiService Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService LocalStorage
+
+<MudPaper MaxWidth="250px" Class="pa-4">
+    <MudText Typo="Typo.h5">Login</MudText>
+    <MudForm @bind-IsValid="@success" @onkeydown="Form_KeyDown">
+        <MudTextField Immediate="true" T="string" Label="Username" @bind-Value="@login.Username" Required="true" />
+        <MudTextField Immediate="true" T="string" Label="Password" @bind-Value="@login.Password" InputType="InputType.Password" Required="true" />
+        <MudButton Disabled="!success" Class="mt-10" Variant="Variant.Filled" Color="Color.Success" OnClick="HandleLogin">Login</MudButton>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private bool success;
+    private UserLoginDto login = new();
+
+    private async Task HandleLogin()
+    {
+        if (!success)
+            return;
+
+        var token = await Api.Login(login);
+        await LocalStorage.SetItemAsync("token", token);
+        await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+
+    private async Task Form_KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await HandleLogin();
+        }
+    }
+}
